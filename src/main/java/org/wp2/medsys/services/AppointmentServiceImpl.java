@@ -8,6 +8,7 @@ import org.wp2.medsys.domain.Appointment;
 import org.wp2.medsys.notify.Notifier;
 import org.wp2.medsys.repositories.AppointmentRepository;
 import org.wp2.medsys.strategy.BookingPolicy;
+import org.wp2.medsys.validation.ValidationHandler;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -21,6 +22,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final AppointmentRepository appointmentRepository;
     private final BookingPolicy bookingPolicy;
     private final Notifier notifier;
+    private final ValidationHandler bookingValidationChain;
 
     @Override
     public List<Appointment> findAll() {
@@ -34,8 +36,11 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     @Override
     @Transactional
-    public Appointment create(Appointment appointment) {
-        // Basic sanity checks
+    public Appointment create(Appointment appointment) throws Throwable {
+        // ---- Chain of Responsibility: pre-validations ----
+        bookingValidationChain.handle(appointment);
+
+        // ---- Strategy: booking policy (doctor capacity/overlaps) ----
         if (appointment.getDoctor() == null || appointment.getDoctor().getId() == null) {
             throw new IllegalArgumentException("Doctor must be specified.");
         }
@@ -43,21 +48,18 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (when == null) {
             throw new IllegalArgumentException("Appointment date/time must be specified.");
         }
-
-        // Strategy: booking policy
         bookingPolicy.assertCanBook(appointment.getDoctor().getId(), when);
 
-        // Persist
+        // ---- Persist + Notify ----
         Appointment saved = appointmentRepository.save(appointment);
-        log.info("Appointment created: id={}, doctorId={}, patientId={}, when={}",
+        log.info("Appointment created: id={}, doctorId={}, patientId={}, when={}, policy={}",
                 saved.getId(),
                 saved.getDoctor() != null ? saved.getDoctor().getId() : null,
                 saved.getPatient() != null ? saved.getPatient().getId() : null,
-                saved.getAppointmentDate());
+                saved.getAppointmentDate(),
+                bookingPolicy.name());
 
-        // Strategy: notifier (stub)
         notifier.onAppointmentScheduled(saved);
-
         return saved;
     }
 

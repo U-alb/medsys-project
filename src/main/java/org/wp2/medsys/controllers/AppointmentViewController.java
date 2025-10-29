@@ -37,7 +37,7 @@ public class AppointmentViewController {
             @RequestParam LocalDateTime appointmentDate,
             @RequestParam Long doctorId,
             @RequestParam String scheduleReason,
-            Authentication authentication) {
+            Authentication authentication) throws Throwable {
         
         // Get the current logged-in patient
         String username = authentication.getName();

@@ -8,7 +8,7 @@ import java.util.Optional;
 public interface AppointmentService {
     List<Appointment> findAll();
     Optional<Appointment> findById(Long id);
-    Appointment create(Appointment appointment);
+    Appointment create(Appointment appointment) throws Throwable;
     Appointment update(Appointment appointment);
     void deleteById(Long id);
 

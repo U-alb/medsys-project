@@ -116,8 +116,16 @@ public class DataLoader implements CommandLineRunner {
                 Status.PENDING
         );
 
-        appointmentService.create(ap1);
-        appointmentService.create(ap2);
+        try {
+            appointmentService.create(ap1);
+        } catch (Throwable e) {
+            throw new RuntimeException(e);
+        }
+        try {
+            appointmentService.create(ap2);
+        } catch (Throwable e) {
+            throw new RuntimeException(e);
+        }
 
         /* -------- 5) medical records -------- */
         MedicalRecord mr1 = new MedicalRecord(

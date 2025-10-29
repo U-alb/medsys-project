@@ -14,4 +14,10 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
      * (Our POC treats appointmentDate as a single time slot without duration.)
      */
     long countByDoctorIdAndAppointmentDate(Long doctorId, LocalDateTime appointmentDate);
+
+    long countByPatientIdAndAppointmentDate(Long patientId, LocalDateTime appointmentDate);
+
+    long countByPatientIdAndAppointmentDateBetween(Long patientId,
+                                                   LocalDateTime startInclusive,
+                                                   LocalDateTime endInclusive);
 }
