@@ -29,7 +29,9 @@ public class DoctorAvailabilityCheck extends BaseValidationHandler {
         }
         if (when.isBefore(LocalDateTime.now())) {
             log.info("[CoR] DoctorAvailabilityCheck -> FAIL (past datetime)");
-            throw new Throwable("Cannot schedule in the past.");
+            // Option B: plain JDK exception (also mapped to 400)
+            throw new IllegalArgumentException("Cannot schedule in the past.");
+
         }
 
         log.info("[CoR] DoctorAvailabilityCheck -> OK doctorId={}, when={}", doctorId, when);

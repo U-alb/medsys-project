@@ -2,7 +2,6 @@ package org.wp2.medsys.validation;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.wp2.medsys.domain.Appointment;
 import org.wp2.medsys.errors.ConflictException;
 import org.wp2.medsys.repositories.AppointmentRepository;
@@ -15,9 +14,7 @@ import java.time.LocalDateTime;
 public class BusinessRulesCheck extends BaseValidationHandler {
 
     private final AppointmentRepository appointmentRepository;
-
-    @Value("${medsys.rules.max-per-day:3}")
-    private int maxPerDay;
+    private final int maxPerDay; // <— injected via ValidationConfig
 
     @Override
     protected void doValidate(Appointment appointment) {
@@ -27,7 +24,9 @@ public class BusinessRulesCheck extends BaseValidationHandler {
         LocalDateTime start = day.atStartOfDay();
         LocalDateTime end = day.plusDays(1).atStartOfDay().minusNanos(1);
 
-        long count = appointmentRepository.countByPatientIdAndAppointmentDateBetween(patientId, start, end);
+        long count = appointmentRepository
+                .countByPatientIdAndAppointmentDateBetween(patientId, start, end);
+
         if (count >= maxPerDay) {
             log.info("[CoR] BusinessRulesCheck -> FAIL (max-per-day) patientId={}, day={}, count={}, limit={}",
                     patientId, day, count, maxPerDay);
