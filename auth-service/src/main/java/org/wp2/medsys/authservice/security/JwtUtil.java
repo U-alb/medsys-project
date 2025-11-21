@@ -11,8 +11,24 @@ import org.wp2.medsys.authservice.domain.Role;
 import java.time.Instant;
 import java.util.Date;
 
+/**
+ * Central JWT helper for MedSys.
+ *
+ * Token format (used across all microservices):
+ *  - Algorithm: HMAC-SHA256
+ *  - Subject (sub): username
+ *  - Claim "role": one of PATIENT, DOCTOR, ADMIN
+ *  - iat / exp: issued-at and expiration timestamps
+ *
+ * Other services (appointments, notifications, etc.) must:
+ *  - use the same secret (auth.jwt.secret)
+ *  - read "sub" as username
+ *  - read "role" claim to apply authorization rules.
+ */
 @Component
 public class JwtUtil {
+
+    public static final String CLAIM_ROLE = "role";
 
     private final Algorithm algorithm;
     private final long expirationSeconds;
@@ -31,7 +47,7 @@ public class JwtUtil {
 
         return JWT.create()
                 .withSubject(username)
-                .withClaim("role", role.name())
+                .withClaim(CLAIM_ROLE, role.name())
                 .withIssuedAt(Date.from(now))
                 .withExpiresAt(Date.from(expiresAt))
                 .sign(algorithm);
@@ -48,7 +64,7 @@ public class JwtUtil {
     }
 
     public Role getRole(String token) {
-        String roleName = decodeToken(token).getClaim("role").asString();
+        String roleName = decodeToken(token).getClaim(CLAIM_ROLE).asString();
         return Role.valueOf(roleName);
     }
 

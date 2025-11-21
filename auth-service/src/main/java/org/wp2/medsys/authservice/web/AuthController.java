@@ -12,6 +12,7 @@ import org.wp2.medsys.authservice.dto.LoginResponse;
 import org.wp2.medsys.authservice.dto.RegisterDTO;
 import org.wp2.medsys.authservice.dto.UserResponse;
 import org.wp2.medsys.authservice.exceptions.InvalidCredentialsException;
+import org.wp2.medsys.authservice.exceptions.UserAlreadyExistsException;
 import org.wp2.medsys.authservice.repositories.UserRepository;
 import org.wp2.medsys.authservice.services.AuthService;
 import org.wp2.medsys.authservice.services.RegistrationService;
@@ -28,17 +29,34 @@ public class AuthController {
     private final UserRepository userRepository;
 
     @PostMapping("/register")
-    public ResponseEntity<UserResponse> register(@Valid @RequestBody RegisterDTO dto) {
-        User saved = registrationService.register(dto);
+    public ResponseEntity<?> register(@Valid @RequestBody RegisterDTO dto) {
+        try {
+            User saved = registrationService.register(dto);
 
-        UserResponse response = new UserResponse(
-                saved.getId(),
-                saved.getUsername(),
-                saved.getEmail(),
-                saved.getRole()
-        );
+            UserResponse response = new UserResponse(
+                    saved.getId(),
+                    saved.getUsername(),
+                    saved.getEmail(),
+                    saved.getRole()
+            );
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (UserAlreadyExistsException ex) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of(
+                            "status", 409,
+                            "error", "Conflict",
+                            "message", ex.getMessage()
+                    ));
+        } catch (IllegalArgumentException ex) {
+            // e.g. trying to register as ADMIN
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of(
+                            "status", 400,
+                            "error", "Bad Request",
+                            "message", ex.getMessage()
+                    ));
+        }
     }
 
     @PostMapping("/login")
@@ -58,7 +76,6 @@ public class AuthController {
 
     @GetMapping("/me")
     public ResponseEntity<UserResponse> me(Authentication authentication) {
-        // Authentication is set by JwtAuthenticationFilter
         String username = (String) authentication.getPrincipal();
 
         User user = userRepository.findByUsername(username)
