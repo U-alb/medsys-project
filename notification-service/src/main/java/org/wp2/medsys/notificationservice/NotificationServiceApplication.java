@@ -1,13 +1,12 @@
-package org.wp2.medsys.notificationsservice;
+package org.wp2.medsys.notificationservice;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class NotificationsServiceApplication {
+public class NotificationServiceApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(NotificationsServiceApplication.class, args);
+        SpringApplication.run(NotificationServiceApplication.class, args);
     }
-
 }
