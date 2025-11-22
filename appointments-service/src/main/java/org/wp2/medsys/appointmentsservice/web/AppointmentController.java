@@ -2,18 +2,20 @@ package org.wp2.medsys.appointmentsservice.web;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.*;
 import org.wp2.medsys.appointmentsservice.domain.Appointment;
+import org.wp2.medsys.appointmentsservice.domain.Status;
 import org.wp2.medsys.appointmentsservice.dto.AppointmentCreateDTO;
 import org.wp2.medsys.appointmentsservice.dto.AppointmentResponse;
 import org.wp2.medsys.appointmentsservice.dto.DecisionRequest;
-import org.wp2.medsys.appointmentsservice.errors.BookingConflictException;
 import org.wp2.medsys.appointmentsservice.services.AppointmentService;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -52,8 +54,8 @@ public class AppointmentController {
     /* ---------- Booking endpoints ---------- */
 
     /**
-     * Main booking endpoint: PATIENT books an appointment for themselves.
-     * - patientUsername is taken from JWT, not from request body.
+     * PATIENT books an appointment for themselves.
+     * patientUsername is taken from JWT, not from body.
      */
     @PostMapping
     public ResponseEntity<?> create(Authentication authentication,
@@ -68,31 +70,14 @@ public class AppointmentController {
         }
 
         String patientUsername = authentication.getName();
-
-        try {
-            Appointment created = appointmentService.create(dto, patientUsername);
-            return ResponseEntity
-                    .status(HttpStatus.CREATED)
-                    .body(toResponse(created));
-        } catch (BookingConflictException ex) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of(
-                            "status", 409,
-                            "error", "Conflict",
-                            "message", ex.getMessage()
-                    ));
-        } catch (IllegalArgumentException ex) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Map.of(
-                            "status", 400,
-                            "error", "Bad Request",
-                            "message", ex.getMessage()
-                    ));
-        }
+        Appointment created = appointmentService.create(dto, patientUsername);
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(toResponse(created));
     }
 
     /**
-     * Debug endpoint: list all appointments (any authenticated user).
+     * Debug endpoint: all appointments (any authenticated user).
      */
     @GetMapping
     public List<AppointmentResponse> listAll() {
@@ -102,13 +87,15 @@ public class AppointmentController {
                 .toList();
     }
 
-    /* ---------- Per-user endpoints (JWT-based) ---------- */
+    /* ---------- Per-patient endpoints ---------- */
 
     /**
-     * Patient view: current patient sees their own appointments.
+     * Current patient sees their own appointments, optionally filtered by status.
+     * Example: GET /appointments/mine?status=PENDING
      */
     @GetMapping("/mine")
-    public ResponseEntity<?> mine(Authentication authentication) {
+    public ResponseEntity<?> mine(Authentication authentication,
+                                  @RequestParam(required = false) String status) {
         if (!hasRole(authentication, "PATIENT")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of(
@@ -120,8 +107,19 @@ public class AppointmentController {
 
         String username = authentication.getName();
 
+        Status filterStatus = null;
+        if (status != null && !status.isBlank()) {
+            try {
+                filterStatus = Status.valueOf(status.toUpperCase());
+            } catch (IllegalArgumentException ex) {
+                throw new IllegalArgumentException("Invalid status filter: " + status);
+            }
+        }
+
+        Status finalFilterStatus = filterStatus;
         List<AppointmentResponse> result = appointmentService.findForPatient(username)
                 .stream()
+                .filter(a -> finalFilterStatus == null || a.getStatus() == finalFilterStatus)
                 .map(this::toResponse)
                 .toList();
 
@@ -129,10 +127,45 @@ public class AppointmentController {
     }
 
     /**
-     * Doctor view: current doctor sees their own appointments.
+     * Patient cancels their own upcoming appointment.
+     */
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<?> cancel(@PathVariable Long id,
+                                    Authentication authentication) {
+        if (!hasRole(authentication, "PATIENT")) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of(
+                            "status", 403,
+                            "error", "Forbidden",
+                            "message", "Only patients can cancel appointments."
+                    ));
+        }
+
+        String patientUsername = authentication.getName();
+        Appointment updated = appointmentService.cancel(id, patientUsername);
+        return ResponseEntity.ok(toResponse(updated));
+    }
+
+    /* ---------- Per-doctor endpoints ---------- */
+
+    /**
+     * Current doctor sees their own appointments.
+     * Optional filters: from/to (ISO date-time) + status.
+     *
+     * Example:
+     * GET /appointments/doctor/me?from=2025-11-25T00:00:00&to=2025-11-26T00:00:00&status=PENDING
      */
     @GetMapping("/doctor/me")
-    public ResponseEntity<?> doctorMine(Authentication authentication) {
+    public ResponseEntity<?> doctorMine(
+            Authentication authentication,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime from,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime to,
+            @RequestParam(required = false) String status) {
+
         if (!hasRole(authentication, "DOCTOR")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of(
@@ -144,15 +177,28 @@ public class AppointmentController {
 
         String username = authentication.getName();
 
+        Status filterStatus = null;
+        if (status != null && !status.isBlank()) {
+            try {
+                filterStatus = Status.valueOf(status.toUpperCase());
+            } catch (IllegalArgumentException ex) {
+                throw new IllegalArgumentException("Invalid status filter: " + status);
+            }
+        }
+
+        Status finalFilterStatus = filterStatus;
         List<AppointmentResponse> result = appointmentService.findForDoctor(username)
                 .stream()
+                .filter(a -> finalFilterStatus == null || a.getStatus() == finalFilterStatus)
+                .filter(a -> from == null || !a.getStartTime().isBefore(from))
+                .filter(a -> to == null || !a.getStartTime().isAfter(to))
                 .map(this::toResponse)
                 .toList();
 
         return ResponseEntity.ok(result);
     }
 
-    /* ---------- Old-style per-username endpoints (debug) ---------- */
+    /* ---------- Old-style debug endpoints ---------- */
 
     @GetMapping("/patient/{username}")
     public List<AppointmentResponse> forPatient(@PathVariable String username) {
@@ -170,11 +216,8 @@ public class AppointmentController {
                 .toList();
     }
 
-    /* ---------- Decision endpoint ---------- */
+    /* ---------- Decision endpoint (doctor) ---------- */
 
-    /**
-     * Doctor decides pending appointment (ACCEPT / DENY) for their own appointments.
-     */
     @PostMapping("/{id}/decision")
     public ResponseEntity<?> decide(@PathVariable Long id,
                                     Authentication authentication,
@@ -189,24 +232,7 @@ public class AppointmentController {
         }
 
         String doctorUsername = authentication.getName();
-
-        try {
-            Appointment updated = appointmentService.decideStatus(id, request.decision(), doctorUsername);
-            return ResponseEntity.ok(toResponse(updated));
-        } catch (BookingConflictException ex) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of(
-                            "status", 409,
-                            "error", "Conflict",
-                            "message", ex.getMessage()
-                    ));
-        } catch (IllegalArgumentException ex) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Map.of(
-                            "status", 400,
-                            "error", "Bad Request",
-                            "message", ex.getMessage()
-                    ));
-        }
+        Appointment updated = appointmentService.decideStatus(id, request.decision(), doctorUsername);
+        return ResponseEntity.ok(toResponse(updated));
     }
 }

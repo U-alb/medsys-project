@@ -16,4 +16,6 @@ public interface AppointmentService {
     List<Appointment> findForDoctor(String doctorUsername);
 
     Appointment decideStatus(Long id, String decision, String doctorUsername);
+
+    Appointment cancel(Long id, String patientUsername);
 }

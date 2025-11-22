@@ -1,6 +1,7 @@
 package org.wp2.medsys.appointmentsservice.services;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,9 +20,10 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AppointmentServiceImpl implements AppointmentService {
 
-    private static final int MAX_APPOINTMENTS_PER_DAY_PER_PATIENT = 3;
-
     private final AppointmentRepository repo;
+
+    @Value("${appointments.max-per-day-per-patient:3}")
+    private int maxAppointmentsPerDayPerPatient;
 
     @Override
     @Transactional
@@ -72,6 +74,30 @@ public class AppointmentServiceImpl implements AppointmentService {
         appointment.setStatus(newStatus);
         return repo.save(appointment);
     }
+
+    @Override
+    @Transactional
+    public Appointment cancel(Long id, String patientUsername) {
+        Appointment appointment = repo.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Appointment not found: " + id));
+
+        if (!appointment.getPatientUsername().equals(patientUsername)) {
+            throw new AccessDeniedException("You can only cancel your own appointments.");
+        }
+
+        if (appointment.getStatus() != Status.PENDING && appointment.getStatus() != Status.ACCEPTED) {
+            throw new BookingConflictException("Only pending or accepted appointments can be cancelled.");
+        }
+
+        if (appointment.getStartTime().isBefore(LocalDateTime.now())) {
+            throw new BookingConflictException("Cannot cancel past appointments.");
+        }
+
+        appointment.setStatus(Status.CANCELLED);
+        return repo.save(appointment);
+    }
+
+    /* ----------------- helpers ----------------- */
 
     private Status mapDecisionToStatus(String decision) {
         if (decision == null) {
@@ -134,7 +160,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                 relevantStatuses
         );
 
-        if (perDayCount >= MAX_APPOINTMENTS_PER_DAY_PER_PATIENT) {
+        if (perDayCount >= maxAppointmentsPerDayPerPatient) {
             throw new BookingConflictException("You reached the daily limit of appointments.");
         }
     }
