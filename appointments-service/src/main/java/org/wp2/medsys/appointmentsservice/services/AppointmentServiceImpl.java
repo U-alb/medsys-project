@@ -9,6 +9,7 @@ import org.wp2.medsys.appointmentsservice.domain.Appointment;
 import org.wp2.medsys.appointmentsservice.domain.Status;
 import org.wp2.medsys.appointmentsservice.dto.AppointmentCreateDTO;
 import org.wp2.medsys.appointmentsservice.errors.BookingConflictException;
+import org.wp2.medsys.appointmentsservice.notifications.NotificationClient;
 import org.wp2.medsys.appointmentsservice.repositories.AppointmentRepository;
 
 import java.time.LocalDate;
@@ -21,6 +22,8 @@ import java.util.List;
 public class AppointmentServiceImpl implements AppointmentService {
 
     private final AppointmentRepository repo;
+
+    private final NotificationClient notificationClient;
 
     @Value("${appointments.max-per-day-per-patient:3}")
     private int maxAppointmentsPerDayPerPatient;
@@ -72,7 +75,19 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         Status newStatus = mapDecisionToStatus(decision);
         appointment.setStatus(newStatus);
-        return repo.save(appointment);
+        Appointment saved = repo.save(appointment);
+
+        // ---- notifications integration ----
+        if (newStatus == Status.ACCEPTED) {
+            // notify patient: appointment accepted
+            notificationClient.sendAppointmentAccepted(saved);
+        } else if (newStatus == Status.DENIED) {
+            // notify patient: appointment denied
+            notificationClient.sendAppointmentDenied(saved);
+        }
+        // -----------------------------------
+
+        return saved;
     }
 
     @Override
@@ -94,7 +109,12 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
 
         appointment.setStatus(Status.CANCELLED);
-        return repo.save(appointment);
+        Appointment saved = repo.save(appointment);
+
+        // notify doctor: patient cancelled the appointment
+        notificationClient.sendAppointmentCancelled(saved);
+
+        return saved;
     }
 
     /* ----------------- helpers ----------------- */

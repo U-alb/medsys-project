@@ -1,12 +1,16 @@
 package org.wp2.medsys.notificationservice.web;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.wp2.medsys.notificationservice.domain.Notification;
 import org.wp2.medsys.notificationservice.domain.NotificationStatus;
-import org.wp2.medsys.notificationservice.dto.NotificationResponse;
+import org.wp2.medsys.notificationservice.dto.NotificationCreateDTO;
+import org.wp2.medsys.notificationservice.dto.NotificationResponseDTO;
 import org.wp2.medsys.notificationservice.services.NotificationService;
 
 import java.util.List;
@@ -19,91 +23,85 @@ public class NotificationController {
 
     private final NotificationService notificationService;
 
-    private NotificationResponse toResponse(Notification n) {
-        return new NotificationResponse(
+    /* -------- internal endpoint (called by appointments-service) -------- */
+
+    @PostMapping("/internal/create")
+    public ResponseEntity<NotificationResponseDTO> createInternal(
+            @Valid @RequestBody NotificationCreateDTO dto
+    ) {
+        Notification notification = notificationService.create(dto);
+        return ResponseEntity.status(HttpStatus.CREATED).body(toDto(notification));
+    }
+
+    /* -------- admin: see all notifications -------- */
+
+    @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    public List<NotificationResponseDTO> getAll() {
+        return notificationService.findAll()
+                .stream()
+                .map(this::toDto)
+                .toList();
+    }
+
+    /* -------- current user: notifications -------- */
+
+    @GetMapping("/mine")
+    public List<NotificationResponseDTO> getMine(
+            Authentication authentication,
+            @RequestParam(name = "status", required = false) NotificationStatus status
+    ) {
+        String username = (String) authentication.getPrincipal();
+
+        List<Notification> notifications;
+        if (status == null) {
+            notifications = notificationService.findForRecipient(username);
+        } else {
+            notifications = notificationService.findForRecipient(username, status);
+        }
+
+        return notifications.stream()
+                .map(this::toDto)
+                .toList();
+    }
+
+    @GetMapping("/mine/unread-count")
+    public Map<String, Long> countUnreadMine(Authentication authentication) {
+        String username = (String) authentication.getPrincipal();
+        long count = notificationService.countUnread(username);
+        return Map.of("unreadCount", count);
+    }
+
+    @PostMapping("/{id}/mark-read")
+    public NotificationResponseDTO markRead(
+            @PathVariable Long id,
+            Authentication authentication
+    ) {
+        String username = (String) authentication.getPrincipal();
+        Notification updated = notificationService.markAsRead(id, username);
+        return toDto(updated);
+    }
+
+    @PostMapping("/mark-all-read")
+    public Map<String, Integer> markAllRead(Authentication authentication) {
+        String username = (String) authentication.getPrincipal();
+        int updatedCount = notificationService.markAllAsRead(username);
+        return Map.of("updated", updatedCount);
+    }
+
+    /* -------- mapping helper -------- */
+
+    private NotificationResponseDTO toDto(Notification n) {
+        return new NotificationResponseDTO(
                 n.getId(),
                 n.getRecipientUsername(),
                 n.getTitle(),
                 n.getMessage(),
                 n.getType(),
-                n.getRelatedAppointmentId(),
                 n.getStatus(),
+                n.getRelatedAppointmentId(),
                 n.getCreatedAt(),
                 n.getReadAt()
-        );
-    }
-
-    /**
-     * Current user notifications (optionally filtered by status).
-     * GET /notifications/mine?status=UNREAD
-     */
-    @GetMapping("/mine")
-    public ResponseEntity<List<NotificationResponse>> mine(
-            Authentication authentication,
-            @RequestParam(required = false) String status
-    ) {
-        String username = authentication.getName();
-
-        NotificationStatus filterStatus = null;
-        if (status != null && !status.isBlank()) {
-            String normalized = status.trim().toUpperCase();
-            try {
-                filterStatus = NotificationStatus.valueOf(normalized);
-            } catch (IllegalArgumentException ex) {
-                throw new IllegalArgumentException("Invalid status filter: " + normalized);
-            }
-        }
-
-        List<Notification> list = (filterStatus == null)
-                ? notificationService.findForRecipient(username)
-                : notificationService.findForRecipient(username, filterStatus);
-
-        List<NotificationResponse> response = list.stream()
-                .map(this::toResponse)
-                .toList();
-
-        return ResponseEntity.ok(response);
-    }
-
-    /**
-     * Unread count for the current user.
-     * GET /notifications/unread-count
-     */
-    @GetMapping("/unread-count")
-    public Map<String, Object> unreadCount(Authentication authentication) {
-        String username = authentication.getName();
-        long count = notificationService.countUnread(username);
-        return Map.of(
-                "username", username,
-                "unreadCount", count
-        );
-    }
-
-    /**
-     * Mark a single notification as read (if it belongs to current user).
-     * POST /notifications/{id}/read
-     */
-    @PostMapping("/{id}/read")
-    public NotificationResponse markRead(
-            @PathVariable Long id,
-            Authentication authentication
-    ) {
-        String username = authentication.getName();
-        Notification updated = notificationService.markAsRead(id, username);
-        return toResponse(updated);
-    }
-
-    /**
-     * Mark all notifications for current user as read.
-     * POST /notifications/read-all
-     */
-    @PostMapping("/read-all")
-    public Map<String, Object> markAllRead(Authentication authentication) {
-        String username = authentication.getName();
-        int updated = notificationService.markAllAsRead(username);
-        return Map.of(
-                "username", username,
-                "updated", updated
         );
     }
 }
