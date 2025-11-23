@@ -1,0 +1,3 @@
+CREATE DATABASE IF NOT EXISTS medsys_auth;
+CREATE DATABASE IF NOT EXISTS medsys_appointments;
+CREATE DATABASE IF NOT EXISTS medsys_notifications;
