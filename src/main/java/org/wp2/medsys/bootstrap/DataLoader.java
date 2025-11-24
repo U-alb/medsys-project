@@ -1,9 +1,11 @@
+// src/main/java/org/wp2/medsys/bootstrap/DataLoader.java
 package org.wp2.medsys.bootstrap;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.stereotype.Component;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Component;
 import org.wp2.medsys.domain.*;
 import org.wp2.medsys.services.*;
 
@@ -12,30 +14,28 @@ import java.time.LocalDateTime;
 
 @Slf4j
 @Component
+@Profile("dev") // <-- Seeder runs only under spring.profiles.active=dev
 public class DataLoader implements CommandLineRunner {
 
-    /* ---------- services ---------- */
     private final PatientService       patientService;
     private final DoctorService        doctorService;
     private final AppointmentService   appointmentService;
     private final MedicalRecordService medicalRecordService;
     private final PrescriptionService  prescriptionService;
+    private final PasswordEncoder      passwordEncoder;
 
-    /* ---------- the encoder we’ll use everywhere ---------- */
-    private final PasswordEncoder passwordEncoder;
-
-    public DataLoader(PatientService       patientService,
-                      DoctorService        doctorService,
-                      AppointmentService   appointmentService,
+    public DataLoader(PatientService patientService,
+                      DoctorService doctorService,
+                      AppointmentService appointmentService,
                       MedicalRecordService medicalRecordService,
-                      PrescriptionService  prescriptionService,
-                      PasswordEncoder      passwordEncoder) {   // <-- injected
-        this.patientService       = patientService;
-        this.doctorService        = doctorService;
-        this.appointmentService   = appointmentService;
+                      PrescriptionService prescriptionService,
+                      PasswordEncoder passwordEncoder) {
+        this.patientService = patientService;
+        this.doctorService = doctorService;
+        this.appointmentService = appointmentService;
         this.medicalRecordService = medicalRecordService;
-        this.prescriptionService  = prescriptionService;
-        this.passwordEncoder      = passwordEncoder;
+        this.prescriptionService = prescriptionService;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -52,7 +52,7 @@ public class DataLoader implements CommandLineRunner {
         Patient john = new Patient(
                 "john.doe",
                 "john.doe@example.com",
-                passwordEncoder.encode("pass"),            // hashed ↴
+                passwordEncoder.encode("pass"),
                 LocalDate.of(1990, 1, 1),
                 "M",
                 "0722-123-456",
@@ -94,9 +94,14 @@ public class DataLoader implements CommandLineRunner {
         house   = doctorService.create(house);
         wattson = doctorService.create(wattson);
 
-        /* -------- 4) appointments -------- */
+        /* -------- 4) appointments (relative to 'now') -------- */
+        LocalDateTime t1 = LocalDateTime.now()
+                .plusDays(1).withHour(9).withMinute(30).withSecond(0).withNano(0);
+        LocalDateTime t2 = LocalDateTime.now()
+                .plusDays(2).withHour(14).withMinute(0).withSecond(0).withNano(0);
+
         Appointment ap1 = new Appointment(
-                LocalDateTime.of(2025, 5, 20, 9, 30),
+                t1,
                 john,
                 house,
                 "Annual physical exam",
@@ -104,15 +109,23 @@ public class DataLoader implements CommandLineRunner {
         );
 
         Appointment ap2 = new Appointment(
-                LocalDateTime.of(2025, 5, 21, 14, 0),
+                t2,
                 jane,
                 wattson,
                 "Flu-like symptoms",
                 Status.PENDING
         );
 
-        appointmentService.create(ap1);
-        appointmentService.create(ap2);
+        try {
+            appointmentService.create(ap1);
+        } catch (Throwable e) {
+            throw new RuntimeException(e);
+        }
+        try {
+            appointmentService.create(ap2);
+        } catch (Throwable e) {
+            throw new RuntimeException(e);
+        }
 
         /* -------- 5) medical records -------- */
         MedicalRecord mr1 = new MedicalRecord(
@@ -120,7 +133,7 @@ public class DataLoader implements CommandLineRunner {
                 "All values within normal ranges.",
                 john,
                 house,
-                LocalDateTime.of(2024, 12, 1, 10, 0)
+                LocalDateTime.now().minusMonths(1).withSecond(0).withNano(0)
         );
 
         medicalRecordService.create(mr1);
@@ -138,11 +151,11 @@ public class DataLoader implements CommandLineRunner {
         prescriptionService.create(rx1);
 
         /* -------- 7) confirm -------- */
-        log.info("\n=== Sample Data Loaded ==="
-                + "\nPatients:       {}", patientService.findAll());
-        log.info("Doctors:        {}", doctorService.findAll());
-        log.info("Appointments:   {}", appointmentService.findAll());
-        log.info("MedicalRecords: {}", medicalRecordService.findAll());
-        log.info("Prescriptions:  {}", prescriptionService.findAll());
+        log.info("=== Sample Data Loaded (dev) ===");
+        log.info("Patients:       {}", patientService.findAll().size());
+        log.info("Doctors:        {}", doctorService.findAll().size());
+        log.info("Appointments:   {}", appointmentService.findAll().size());
+        log.info("MedicalRecords: {}", medicalRecordService.findAll().size());
+        log.info("Prescriptions:  {}", prescriptionService.findAll().size());
     }
 }

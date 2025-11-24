@@ -1,37 +1,39 @@
-
 package org.wp2.medsys.controllers;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
-import org.wp2.medsys.domain.*;
-import org.wp2.medsys.DTO.RegisterDTO;          // use the package name you created
+import org.wp2.medsys.DTO.RegisterDTO;
+import org.wp2.medsys.domain.Role;
+import org.wp2.medsys.domain.User;
 import org.wp2.medsys.repositories.UserRepository;
+import org.wp2.medsys.services.RegistrationService;
 
 @Controller
 @RequiredArgsConstructor
 public class AuthController {
 
-    private final UserRepository  repo;
-    private final PasswordEncoder encoder;
+    private final UserRepository repo;                // used for portal redirect & username pre-check
+    private final RegistrationService registrationService;
 
     /* ---------- views ---------- */
 
     @GetMapping("/login")
-    public String login() {                     // just returns the login template
+    public String login() {                           // just returns the login template
         return "login";
     }
 
     @GetMapping("/register")
     public String registerForm(Model model) {
-        // empty DTO for the form-binding; five arguments now (username, email,
-        // password, dateOfBirth, role)
-        model.addAttribute("userForm",
-                new RegisterDTO("", "", "", null, Role.PATIENT));
+        // empty DTO for the form-binding: (username, email, password, dateOfBirth, role)
+        if (!model.containsAttribute("userForm")) {
+            model.addAttribute("userForm", new RegisterDTO("", "", "", null, Role.PATIENT));
+        }
         return "register";
     }
 
@@ -53,45 +55,39 @@ public class AuthController {
 
     @GetMapping("/portal/doctorportal")
     public String doctorPortal() {
-        return "portal/doctorportal";  // make sure this file exists: templates/portal/doctorportal.html
+        return "portal/doctorportal";  // ensure templates/portal/doctorportal.html exists
     }
 
     @GetMapping("/portal/patientportal")
     public String patientPortal() {
-        return "portal/patientportal";  // make sure this file exists: templates/portal/patientportal.html
+        return "portal/patientportal"; // ensure templates/portal/patientportal.html exists
     }
-
-
 
     /* ---------- form POST ---------- */
 
     @PostMapping("/register")
-    public String register(@ModelAttribute RegisterDTO dto) {
+    public String register(@ModelAttribute("userForm") RegisterDTO dto, RedirectAttributes ra) {
+        // Friendly duplicate guard on username (email/other uniques handled by DB)
+        if (repo.findByUsername(dto.username()).isPresent()) {
+            ra.addFlashAttribute("error", "Username is already taken.");
+            ra.addFlashAttribute("userForm", dto);
+            return "redirect:/register";
+        }
 
-        User user = switch (dto.role()) {
+        try {
+            registrationService.register(dto);  // delegates to factory + password encoder + save
+        } catch (IllegalArgumentException e) {
+            // e.g., unsupported role (shouldn't happen with current DTO defaults)
+            ra.addFlashAttribute("error", e.getMessage());
+            ra.addFlashAttribute("userForm", dto);
+            return "redirect:/register";
+        } catch (DataIntegrityViolationException e) {
+            // Likely unique constraints (email, license_number, etc.)
+            ra.addFlashAttribute("error", "Account already exists with provided data (email or other unique field).");
+            ra.addFlashAttribute("userForm", dto);
+            return "redirect:/register";
+        }
 
-            case PATIENT -> new Patient(
-                    dto.username(),
-                    dto.email(),
-                    encoder.encode(dto.password()),
-                    dto.dateOfBirth(),     // ⭐ now provided
-                    null,                  // gender  (optional)
-                    null,                  // phone   (optional)
-                    null);                 // address (optional)
-
-            case DOCTOR  -> new Doctor(
-                    dto.username(),
-                    dto.email(),
-                    encoder.encode(dto.password()),
-                    dto.dateOfBirth(),     // ⭐ now provided
-                    null,                  // speciality (optional)
-                    null);                 // licence    (optional)
-
-            case ADMIN   -> throw new IllegalStateException(
-                    "Admin signup is disabled — seed admin users manually");
-        };
-
-        repo.save(user);
         return "redirect:/login?registered";
     }
 }
