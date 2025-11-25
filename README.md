@@ -1,4 +1,4 @@
-# MedSys — SDT Project (Milestone 1)
+# MedSys — Java Web Project
 
 ## Team
 - Dragota Andrei — <anditu2003@gmail.com> -> backend database, routers, endpoints, microservices
