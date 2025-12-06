@@ -342,7 +342,7 @@ Assuming you already created an appointment with ID `2` (for example):
 
 4. **Check notifications**
 
-    * `GET /notifications/mine` as the patient or doctor (depending on how you configured the recipient) to see the stored notification.
+    * `GET /notifications/mine` as the patient or doctor to see the stored notification.
 
 These two flows demonstrate **both** directions we care about:
 
