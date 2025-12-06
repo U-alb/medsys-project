@@ -14,6 +14,19 @@ services:
     networks:
       - medsys-net
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: medsys-rabbitmq
+    ports:
+      - "5672:5672"    # broker port (used by services)
+      - "15672:15672"  # management UI in browser
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    networks:
+      - medsys-net
+
+
   auth-service:
     build: ./auth-service
     container_name: auth-service
