@@ -7,6 +7,8 @@ import org.wp2.medsys.notificationservice.domain.NotificationStatus;
 import org.wp2.medsys.notificationservice.domain.NotificationType;
 import org.wp2.medsys.notificationservice.dto.NotificationCreateDTO;
 import org.wp2.medsys.notificationservice.repositories.NotificationRepository;
+import org.wp2.medsys.notificationservice.messaging.AppointmentEvent;
+import org.wp2.medsys.notificationservice.messaging.AppointmentEventType;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -114,4 +116,86 @@ public class NotificationServiceImpl implements NotificationService {
 
         return create(dto);
     }
+
+    @Override
+    public Notification createFromAppointmentEvent(AppointmentEvent event) {
+        if (event == null) {
+            throw new IllegalArgumentException("event must not be null");
+        }
+
+        AppointmentEventType eventType = event.getType();
+        if (eventType == null) {
+            throw new IllegalArgumentException("event.type must not be null");
+        }
+
+        String patient = event.getPatientUsername();
+        String doctor = event.getDoctorUsername();
+        String when = formatInterval(event.getStartTime(), event.getEndTime());
+
+        NotificationType type;
+        String title;
+        String message;
+
+        switch (eventType) {
+            case APPOINTMENT_CREATED -> {
+                type = NotificationType.APPOINTMENT_CREATED;
+                title = "Appointment requested";
+                message = String.format(
+                        "You requested an appointment with doctor %s on %s.",
+                        doctor, when
+                );
+            }
+            case APPOINTMENT_ACCEPTED -> {
+                type = NotificationType.APPOINTMENT_ACCEPTED;
+                title = "Appointment accepted";
+                message = String.format(
+                        "Your appointment with doctor %s on %s was accepted.",
+                        doctor, when
+                );
+            }
+            case APPOINTMENT_REJECTED -> {
+                // We map REJECTED events to the existing DENIED notification type
+                type = NotificationType.APPOINTMENT_DENIED;
+                title = "Appointment rejected";
+                message = String.format(
+                        "Your appointment request with doctor %s on %s was rejected.",
+                        doctor, when
+                );
+            }
+            case APPOINTMENT_CANCELLED -> {
+                type = NotificationType.APPOINTMENT_CANCELLED;
+                title = "Appointment cancelled";
+                message = String.format(
+                        "Your appointment with doctor %s on %s was cancelled.",
+                        doctor, when
+                );
+            }
+            default -> throw new IllegalArgumentException("Unsupported appointment event type: " + eventType);
+        }
+
+        Notification notification = Notification.builder()
+                .recipientUsername(patient)
+                .title(title)
+                .message(message)
+                .type(type)
+                .relatedAppointmentId(event.getAppointmentId())
+                .status(NotificationStatus.UNREAD)
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        return notificationRepository.save(notification);
+    }
+
+    /**
+     * Very simple time interval formatting.
+     * Example: "2025-12-06T18:30 - 19:00"
+     */
+    private String formatInterval(LocalDateTime start, LocalDateTime end) {
+        if (start == null || end == null) {
+            return "an unspecified time";
+        }
+        return start.toString() + " - " + end.toLocalTime();
+    }
+
+
 }

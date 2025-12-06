@@ -9,7 +9,7 @@ import org.wp2.medsys.appointmentsservice.domain.Appointment;
 import org.wp2.medsys.appointmentsservice.domain.Status;
 import org.wp2.medsys.appointmentsservice.dto.AppointmentCreateDTO;
 import org.wp2.medsys.appointmentsservice.errors.BookingConflictException;
-import org.wp2.medsys.appointmentsservice.notifications.NotificationClient;
+import org.wp2.medsys.appointmentsservice.messaging.AppointmentEventPublisher;
 import org.wp2.medsys.appointmentsservice.repositories.AppointmentRepository;
 
 import java.time.LocalDate;
@@ -22,8 +22,7 @@ import java.util.List;
 public class AppointmentServiceImpl implements AppointmentService {
 
     private final AppointmentRepository repo;
-
-    private final NotificationClient notificationClient;
+    private final AppointmentEventPublisher eventPublisher;
 
     @Value("${appointments.max-per-day-per-patient:3}")
     private int maxAppointmentsPerDayPerPatient;
@@ -41,7 +40,12 @@ public class AppointmentServiceImpl implements AppointmentService {
         a.setEndTime(dto.endTime());
         a.setScheduleReason(dto.scheduleReason());
         a.setStatus(Status.PENDING);
-        return repo.save(a);
+
+        Appointment saved = repo.save(a);
+
+        eventPublisher.publishCreated(saved);
+
+        return saved;
     }
 
     @Override
@@ -75,17 +79,14 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         Status newStatus = mapDecisionToStatus(decision);
         appointment.setStatus(newStatus);
+
         Appointment saved = repo.save(appointment);
 
-        // ---- notifications integration ----
         if (newStatus == Status.ACCEPTED) {
-            // notify patient: appointment accepted
-            notificationClient.sendAppointmentAccepted(saved);
+            eventPublisher.publishAccepted(saved);
         } else if (newStatus == Status.DENIED) {
-            // notify patient: appointment denied
-            notificationClient.sendAppointmentDenied(saved);
+            eventPublisher.publishRejected(saved);
         }
-        // -----------------------------------
 
         return saved;
     }
@@ -109,10 +110,10 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
 
         appointment.setStatus(Status.CANCELLED);
+
         Appointment saved = repo.save(appointment);
 
-        // notify doctor: patient cancelled the appointment
-        notificationClient.sendAppointmentCancelled(saved);
+        eventPublisher.publishCancelled(saved);
 
         return saved;
     }

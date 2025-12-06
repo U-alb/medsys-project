@@ -3,6 +3,7 @@ package org.wp2.medsys.notificationservice.services;
 import org.wp2.medsys.notificationservice.domain.Notification;
 import org.wp2.medsys.notificationservice.domain.NotificationStatus;
 import org.wp2.medsys.notificationservice.dto.NotificationCreateDTO;
+import org.wp2.medsys.notificationservice.messaging.AppointmentEvent;
 
 import java.util.List;
 
@@ -53,4 +54,10 @@ public interface NotificationService {
      * "username + message". It will derive a reasonable title and type.
      */
     Notification createNotification(String username, String message);
+
+    /**
+     * Create and persist a notification derived from an appointment lifecycle event.
+     */
+    Notification createFromAppointmentEvent(AppointmentEvent event);
+
 }
