@@ -3,6 +3,7 @@ package org.wp2.medsys.appointmentsservice.messaging;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 import org.wp2.medsys.appointmentsservice.config.RabbitConfig;
 import org.wp2.medsys.appointmentsservice.domain.Appointment;
@@ -10,6 +11,7 @@ import org.wp2.medsys.appointmentsservice.domain.Appointment;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@Component
 public class AppointmentEventPublisher {
 
     private final RabbitTemplate rabbitTemplate;

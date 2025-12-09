@@ -1,24 +1,16 @@
 package org.wp2.medsys.appointmentsservice.domain;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "appointments")
-@Getter
-@Setter
-@NoArgsConstructor
 public class Appointment {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // For Phase A we just store usernames as strings (no foreign keys)
     @Column(name = "patient_username", nullable = false, length = 50)
     private String patientUsername;
 
@@ -50,4 +42,29 @@ public class Appointment {
             status = Status.PENDING;
         }
     }
+
+    // Getters and Setters
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+
+    public String getPatientUsername() { return patientUsername; }
+    public void setPatientUsername(String patientUsername) { this.patientUsername = patientUsername; }
+
+    public String getDoctorUsername() { return doctorUsername; }
+    public void setDoctorUsername(String doctorUsername) { this.doctorUsername = doctorUsername; }
+
+    public LocalDateTime getStartTime() { return startTime; }
+    public void setStartTime(LocalDateTime startTime) { this.startTime = startTime; }
+
+    public LocalDateTime getEndTime() { return endTime; }
+    public void setEndTime(LocalDateTime endTime) { this.endTime = endTime; }
+
+    public Status getStatus() { return status; }
+    public void setStatus(Status status) { this.status = status; }
+
+    public String getScheduleReason() { return scheduleReason; }
+    public void setScheduleReason(String scheduleReason) { this.scheduleReason = scheduleReason; }
+
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }
