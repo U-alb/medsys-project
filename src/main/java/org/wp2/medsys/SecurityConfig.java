@@ -37,7 +37,7 @@ public class SecurityConfig {
                         .permitAll()
                 )
 
-                // Logout (POST with CSRF token; matches your base.html form)
+                // Logout (POST with CSRF token)
                 .logout(log -> log
                         .logoutUrl("/logout")
                         .logoutSuccessUrl("/login?logout")
