@@ -51,9 +51,21 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
+    public List<Notification> findForRecipient(String recipientUsername, NotificationStatus status) {
+        if (status == null) {
+            // when status is null, use the ORDER BY createdAt DESC query
+            return notificationRepository.findByRecipientUsernameOrderByCreatedAtDesc(recipientUsername);
+        }
+
+        // when status is not null, filter by status
+        return notificationRepository.findByRecipientUsernameAndStatus(recipientUsername, status);
+    }
+    /*
+    @Override
     public List<Notification> findForRecipient(String username, NotificationStatus status) {
         return notificationRepository.findByRecipientUsernameAndStatusOrderByCreatedAtDesc(username, status);
     }
+    */
 
     @Override
     public long countUnread(String username) {
@@ -63,6 +75,20 @@ public class NotificationServiceImpl implements NotificationService {
         );
     }
 
+    @Override
+public Notification markAsRead(Long id, String recipientUsername) {
+    Notification notification = notificationRepository
+            .findByIdAndRecipientUsername(id, recipientUsername)
+            .orElseThrow(() -> new IllegalArgumentException("Notification not found"));
+
+    if (notification.getStatus() != NotificationStatus.READ) {
+        notification.setStatus(NotificationStatus.READ);
+        notification.setReadAt(LocalDateTime.now());
+    }
+
+    return notificationRepository.save(notification);
+}
+    /*
     @Override
     public Notification markAsRead(Long id, String username) {
         Notification notification = notificationRepository
@@ -78,6 +104,7 @@ public class NotificationServiceImpl implements NotificationService {
 
         return notification;
     }
+    */
 
     @Override
     public int markAllAsRead(String username) {

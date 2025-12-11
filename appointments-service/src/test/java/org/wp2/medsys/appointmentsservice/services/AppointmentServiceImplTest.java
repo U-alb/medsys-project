@@ -17,6 +17,8 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Optional;
 
+import org.springframework.test.util.ReflectionTestUtils;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -43,6 +45,8 @@ class AppointmentServiceImplTest {
                 LocalDateTime.now().plusDays(2).withHour(10).withMinute(30).withSecond(0).withNano(0),
                 "Routine check"
         );
+        
+        ReflectionTestUtils.setField(service, "maxAppointmentsPerDayPerPatient", 3);
         // default maxAppointmentsPerDayPerPatient is injected via @Value; no need to set here
     }
 
